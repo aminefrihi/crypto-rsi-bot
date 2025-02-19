@@ -1,35 +1,99 @@
 import os
+import json
 import requests
 import pandas as pd
+from telegram import Update, Bot
+from telegram.ext import Updater, CommandHandler, CallbackContext
 
-# Configuration API
-api_key = os.environ["CRYPTOCOMPARE_API_KEY"]
-headers = {"authorization": f"Apikey {api_key}"}
+# Configuration
+API_KEY = os.environ["CRYPTOCOMPARE_API_KEY"]
+HEADERS = {"authorization": f"Apikey {API_KEY}"}
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+CRYPTO_FILE = "tracked_cryptos.json"
 
-def send_telegram_message(message):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": CHAT_ID, "text": message})
+# Initialisation du bot Telegram
+bot = Bot(token=TELEGRAM_TOKEN)
 
-def fetch_current_prices(crypto_symbols):
-    url = "https://min-api.cryptocompare.com/data/pricemulti"
-    params = {"fsyms": ",".join(crypto_symbols), "tsyms": "USD"}
-    response = requests.get(url, headers=headers, params=params)
-    return response.json()
+# Gestion de la liste des cryptos
+def load_cryptos():
+    try:
+        with open(CRYPTO_FILE, "r") as f:
+            return json.load(f).get("cryptos", [])
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
 
-def fetch_historical_data(symbol, limit=200):
-    url = "https://min-api.cryptocompare.com/data/v2/histohour"
-    params = {"fsym": symbol, "tsym": "USD", "limit": limit}
-    response = requests.get(url, headers=headers, params=params)
-    if response.status_code != 200 or "Data" not in response.json():
-        return None
-    data = response.json()["Data"]["Data"]
-    return {
-        "prices": [entry["close"] for entry in data],
-        "volumes": [entry["volumeto"] for entry in data]
-    }
+def save_cryptos(cryptos):
+    with open(CRYPTO_FILE, "w") as f:
+        json.dump({"cryptos": cryptos}, f)
 
+# Commandes Telegram
+def start(update: Update, context: CallbackContext):
+    if str(update.effective_chat.id) != CHAT_ID:
+        return
+    update.message.reply_text(
+        "🤖 Crypto Trading Bot Pro\n\n"
+        "📌 Commandes disponibles:\n"
+        "/add [SYMBOLE] - Ajouter une crypto\n"
+        "/delete [SYMBOLE] - Supprimer une crypto\n"
+        "/list - Liste des cryptos suivies\n"
+        "/checkinfo [SYMBOLE] - Analyse instantanée\n"
+        "/runnow - Exécuter l'analyse maintenant"
+    )
+
+def add_crypto(update: Update, context: CallbackContext):
+    if str(update.effective_chat.id) != CHAT_ID:
+        return
+    try:
+        symbol = update.message.text.split()[1].upper()
+    except IndexError:
+        update.message.reply_text("❌ Usage: /add [SYMBOLE]")
+        return
+
+    cryptos = load_cryptos()
+    if symbol in cryptos:
+        update.message.reply_text(f"⚠️ {symbol} est déjà dans la liste.")
+        return
+
+    # Vérification de l'existence de la crypto
+    url = f"https://min-api.cryptocompare.com/data/price?fsym={symbol}&tsyms=USD"
+    response = requests.get(url, headers=HEADERS)
+    if "USD" not in response.json():
+        update.message.reply_text(f"❌ {symbol} non trouvé sur CryptoCompare")
+        return
+
+    cryptos.append(symbol)
+    save_cryptos(cryptos)
+    update.message.reply_text(f"✅ {symbol} ajouté avec succès!")
+
+def delete_crypto(update: Update, context: CallbackContext):
+    if str(update.effective_chat.id) != CHAT_ID:
+        return
+    try:
+        symbol = update.message.text.split()[1].upper()
+    except IndexError:
+        update.message.reply_text("❌ Usage: /delete [SYMBOLE]")
+        return
+
+    cryptos = load_cryptos()
+    if symbol not in cryptos:
+        update.message.reply_text(f"❌ {symbol} non trouvé dans la liste.")
+        return
+
+    cryptos.remove(symbol)
+    save_cryptos(cryptos)
+    update.message.reply_text(f"✅ {symbol} supprimé avec succès!")
+
+def list_cryptos(update: Update, context: CallbackContext):
+    if str(update.effective_chat.id) != CHAT_ID:
+        return
+    cryptos = load_cryptos()
+    if not cryptos:
+        update.message.reply_text("📭 La liste est vide")
+        return
+    update.message.reply_text("📋 Cryptos suivies:\n" + "\n".join(cryptos))
+
+# Analyse technique
 def calculate_rsi(prices, period=14):
     delta = pd.Series(prices).diff()
     gain = delta.clip(lower=0)
@@ -55,50 +119,132 @@ def analyze_volume(volumes, window=20):
     current_volume = volumes[-1]
     return current_volume > avg_volume * 2.25 and current_volume > 2_500_000
 
-def display_rsi(cryptos_to_check):
-    current_prices = fetch_current_prices(cryptos_to_check)
-    message = ""
-    status_report = "🔍 Rapport des cryptos surveillées :\n\n"
+def get_crypto_data(symbol):
+    try:
+        # Prix actuel
+        price_url = f"https://min-api.cryptocompare.com/data/price?fsym={symbol}&tsyms=USD"
+        price_data = requests.get(price_url, headers=HEADERS).json()
+        current_price = price_data.get("USD")
 
-    for symbol in cryptos_to_check:
-        if symbol not in current_prices:
-            status_report += f"- {symbol} : Non disponible\n"
-            continue
+        # Données historiques
+        hist_url = "https://min-api.cryptocompare.com/data/v2/histohour"
+        params = {"fsym": symbol, "tsym": "USD", "limit": 200}
+        hist_data = requests.get(hist_url, headers=HEADERS, params=params).json()
+        prices = [entry["close"] for entry in hist_data["Data"]["Data"]]
+        volumes = [entry["volumeto"] for entry in hist_data["Data"]["Data"]]
 
-        price = current_prices[symbol]["USD"]
-        historical_data = fetch_historical_data(symbol)
-        if not historical_data:
-            status_report += f"- {symbol} : Données manquantes\n"
-            continue
+        return {
+            "price": current_price,
+            "prices": prices,
+            "volumes": volumes,
+            "error": None
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
-        prices = historical_data["prices"]
-        volumes = historical_data["volumes"]
-        
-        rsi = calculate_rsi(prices).iloc[-1]
-        sma = calculate_sma(prices).iloc[-1]
-        macd_line, signal_line = calculate_macd(prices)
-        volume_alert = analyze_volume(volumes)
+def generate_signal(symbol):
+    data = get_crypto_data(symbol)
+    if data["error"]:
+        return {"error": data["error"]}
 
-        buy_signal = (rsi < 33) and (price > sma) and (macd_line.iloc[-1] > signal_line.iloc[-1]) and volume_alert
-        sell_signal = (rsi > 67) and (price < sma) and (macd_line.iloc[-1] < signal_line.iloc[-1]) and volume_alert
+    try:
+        rsi = calculate_rsi(data["prices"]).iloc[-1]
+        sma = calculate_sma(data["prices"], 70).iloc[-1]
+        macd_line, signal_line = calculate_macd(data["prices"])
+        volume_alert = analyze_volume(data["volumes"])
 
+        buy_signal = (rsi < 33) and (data["price"] > sma) and (macd_line.iloc[-1] > signal_line.iloc[-1]) and volume_alert
+        sell_signal = (rsi > 67) and (data["price"] < sma) and (macd_line.iloc[-1] < signal_line.iloc[-1]) and volume_alert
+
+        recommendation = ""
         if buy_signal:
-            message += f"🚀 **ACHAT {symbol}**\n"
-            message += f"- Prix: ${price:.6f} (SMA70: ${sma:.6f})\n"
-            message += f"- RSI: {rsi:.1f} | MACD: {macd_line.iloc[-1]:.4f} > {signal_line.iloc[-1]:.4f}\n"
-            message += f"- Volume: 🔥 {volumes[-1]/1e6:.1f}M USD\n\n"
+            recommendation = "🚀 FORT POTENTIEL D'ACHAT"
         elif sell_signal:
-            message += f"🔻 **VENTE {symbol}**\n"
-            message += f"- Prix: ${price:.6f} (SMA70: ${sma:.6f})\n"
-            message += f"- RSI: {rsi:.1f} | MACD: {macd_line.iloc[-1]:.4f} < {signal_line.iloc[-1]:.4f}\n"
-            message += f"- Volume: 💨 {volumes[-1]/1e6:.1f}M USD\n\n"
+            recommendation = "🔻 SIGNAL DE VENTE"
+        else:
+            recommendation = "🟡 NEUTRE"
 
-        status_report += f"- {symbol} : ${price:.6f} | RSI {rsi:.1f} | MACD {macd_line.iloc[-1]:.4f} | Vol {volumes[-1]/1e6:.1f}M\n"
+        return {
+            "symbol": symbol,
+            "price": data["price"],
+            "rsi": rsi,
+            "sma": sma,
+            "macd": macd_line.iloc[-1],
+            "signal_line": signal_line.iloc[-1],
+            "volume_status": "🔥 Élevé" if volume_alert else "💤 Normal",
+            "recommendation": recommendation,
+            "error": None
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
-    if message:
-        send_telegram_message(message)
-    send_telegram_message(status_report)
+def check_crypto_info(update: Update, context: CallbackContext):
+    if str(update.effective_chat.id) != CHAT_ID:
+        return
+
+    try:
+        symbol = update.message.text.split()[1].upper()
+    except IndexError:
+        update.message.reply_text("❌ Usage: /checkinfo [SYMBOLE]")
+        return
+
+    result = generate_signal(symbol)
+    if result.get("error"):
+        update.message.reply_text(f"❌ Erreur: {result['error']}")
+        return
+
+    message = (
+        f"📊 Analyse de {symbol}\n"
+        f"▫️ Prix actuel: ${result['price']:.6f}\n"
+        f"▫️ RSI (14): {result['rsi']:.2f}\n"
+        f"▫️ SMA70: ${result['sma']:.6f}\n"
+        f"▫️ MACD: {result['macd']:.4f} | Signal: {result['signal_line']:.4f}\n"
+        f"▫️ Volume: {result['volume_status']}\n"
+        f"🔍 Recommandation: {result['recommendation']}"
+    )
+    update.message.reply_text(message)
+
+def run_analysis_now(update: Update, context: CallbackContext):
+    if str(update.effective_chat.id) != CHAT_ID:
+        return
+
+    cryptos = load_cryptos()
+    if not cryptos:
+        update.message.reply_text("ℹ️ Aucune crypto à analyser")
+        return
+
+    message = "🔎 Analyse en temps réel :\n\n"
+    for symbol in cryptos:
+        result = generate_signal(symbol)
+        if result.get("error"):
+            message += f"❌ {symbol}: {result['error']}\n"
+        else:
+            message += (
+                f"{result['recommendation']} pour {symbol}\n"
+                f"- Prix: ${result['price']:.6f} | RSI: {result['rsi']:.2f}\n\n"
+            )
+
+    update.message.reply_text(message)
+
+def send_telegram_message(text):
+    requests.post(
+        f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+        json={"chat_id": CHAT_ID, "text": text}
+    )
+
+def main():
+    updater = Updater(TELEGRAM_TOKEN, use_context=True)
+    dp = updater.dispatcher
+
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("add", add_crypto))
+    dp.add_handler(CommandHandler("delete", delete_crypto))
+    dp.add_handler(CommandHandler("list", list_cryptos))
+    dp.add_handler(CommandHandler("checkinfo", check_crypto_info))
+    dp.add_handler(CommandHandler("runnow", run_analysis_now))
+
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == "__main__":
-    cryptos_to_check = ["APE", "GTC", "LOKA", "TRUMP"]
-    display_rsi([crypto.upper().strip() for crypto in cryptos_to_check])
+    main()

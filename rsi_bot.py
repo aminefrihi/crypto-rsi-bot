@@ -3,7 +3,7 @@ import json
 import requests
 import pandas as pd
 from telegram import Update, Bot
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram.ext import Application, CommandHandler, ContextTypes
 
 # Configuration
 API_KEY = os.environ["CRYPTOCOMPARE_API_KEY"]
@@ -28,10 +28,10 @@ def save_cryptos(cryptos):
         json.dump({"cryptos": cryptos}, f)
 
 # Commandes Telegram
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.effective_chat.id) != CHAT_ID:
         return
-    update.message.reply_text(
+    await update.message.reply_text(
         "🤖 Crypto Trading Bot Pro\n\n"
         "📌 Commandes disponibles:\n"
         "/add [SYMBOLE] - Ajouter une crypto\n"
@@ -41,57 +41,57 @@ def start(update: Update, context: CallbackContext):
         "/runnow - Exécuter l'analyse maintenant"
     )
 
-def add_crypto(update: Update, context: CallbackContext):
+async def add_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.effective_chat.id) != CHAT_ID:
         return
     try:
         symbol = update.message.text.split()[1].upper()
     except IndexError:
-        update.message.reply_text("❌ Usage: /add [SYMBOLE]")
+        await update.message.reply_text("❌ Usage: /add [SYMBOLE]")
         return
 
     cryptos = load_cryptos()
     if symbol in cryptos:
-        update.message.reply_text(f"⚠️ {symbol} est déjà dans la liste.")
+        await update.message.reply_text(f"⚠️ {symbol} est déjà dans la liste.")
         return
 
     # Vérification de l'existence de la crypto
     url = f"https://min-api.cryptocompare.com/data/price?fsym={symbol}&tsyms=USD"
     response = requests.get(url, headers=HEADERS)
     if "USD" not in response.json():
-        update.message.reply_text(f"❌ {symbol} non trouvé sur CryptoCompare")
+        await update.message.reply_text(f"❌ {symbol} non trouvé sur CryptoCompare")
         return
 
     cryptos.append(symbol)
     save_cryptos(cryptos)
-    update.message.reply_text(f"✅ {symbol} ajouté avec succès!")
+    await update.message.reply_text(f"✅ {symbol} ajouté avec succès!")
 
-def delete_crypto(update: Update, context: CallbackContext):
+async def delete_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.effective_chat.id) != CHAT_ID:
         return
     try:
         symbol = update.message.text.split()[1].upper()
     except IndexError:
-        update.message.reply_text("❌ Usage: /delete [SYMBOLE]")
+        await update.message.reply_text("❌ Usage: /delete [SYMBOLE]")
         return
 
     cryptos = load_cryptos()
     if symbol not in cryptos:
-        update.message.reply_text(f"❌ {symbol} non trouvé dans la liste.")
+        await update.message.reply_text(f"❌ {symbol} non trouvé dans la liste.")
         return
 
     cryptos.remove(symbol)
     save_cryptos(cryptos)
-    update.message.reply_text(f"✅ {symbol} supprimé avec succès!")
+    await update.message.reply_text(f"✅ {symbol} supprimé avec succès!")
 
-def list_cryptos(update: Update, context: CallbackContext):
+async def list_cryptos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.effective_chat.id) != CHAT_ID:
         return
     cryptos = load_cryptos()
     if not cryptos:
-        update.message.reply_text("📭 La liste est vide")
+        await update.message.reply_text("📭 La liste est vide")
         return
-    update.message.reply_text("📋 Cryptos suivies:\n" + "\n".join(cryptos))
+    await update.message.reply_text("📋 Cryptos suivies:\n" + "\n".join(cryptos))
 
 # Analyse technique
 def calculate_rsi(prices, period=14):
@@ -178,19 +178,19 @@ def generate_signal(symbol):
     except Exception as e:
         return {"error": str(e)}
 
-def check_crypto_info(update: Update, context: CallbackContext):
+async def check_crypto_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.effective_chat.id) != CHAT_ID:
         return
 
     try:
         symbol = update.message.text.split()[1].upper()
     except IndexError:
-        update.message.reply_text("❌ Usage: /checkinfo [SYMBOLE]")
+        await update.message.reply_text("❌ Usage: /checkinfo [SYMBOLE]")
         return
 
     result = generate_signal(symbol)
     if result.get("error"):
-        update.message.reply_text(f"❌ Erreur: {result['error']}")
+        await update.message.reply_text(f"❌ Erreur: {result['error']}")
         return
 
     message = (
@@ -202,15 +202,15 @@ def check_crypto_info(update: Update, context: CallbackContext):
         f"▫️ Volume: {result['volume_status']}\n"
         f"🔍 Recommandation: {result['recommendation']}"
     )
-    update.message.reply_text(message)
+    await update.message.reply_text(message)
 
-def run_analysis_now(update: Update, context: CallbackContext):
+async def run_analysis_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.effective_chat.id) != CHAT_ID:
         return
 
     cryptos = load_cryptos()
     if not cryptos:
-        update.message.reply_text("ℹ️ Aucune crypto à analyser")
+        await update.message.reply_text("ℹ️ Aucune crypto à analyser")
         return
 
     message = "🔎 Analyse en temps réel :\n\n"
@@ -224,7 +224,7 @@ def run_analysis_now(update: Update, context: CallbackContext):
                 f"- Prix: ${result['price']:.6f} | RSI: {result['rsi']:.2f}\n\n"
             )
 
-    update.message.reply_text(message)
+    await update.message.reply_text(message)
 
 def send_telegram_message(text):
     requests.post(
@@ -233,18 +233,14 @@ def send_telegram_message(text):
     )
 
 def main():
-    updater = Updater(TELEGRAM_TOKEN)
-    dp = updater.dispatcher
-
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("add", add_crypto))
-    dp.add_handler(CommandHandler("delete", delete_crypto))
-    dp.add_handler(CommandHandler("list", list_cryptos))
-    dp.add_handler(CommandHandler("checkinfo", check_crypto_info))
-    dp.add_handler(CommandHandler("runnow", run_analysis_now))
-
-    updater.start_polling()
-    updater.idle()
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("add", add_crypto))
+    app.add_handler(CommandHandler("delete", delete_crypto))
+    app.add_handler(CommandHandler("list", list_cryptos))
+    app.add_handler(CommandHandler("checkinfo", check_crypto_info))
+    app.add_handler(CommandHandler("runnow", run_analysis_now))
+    app.run_polling()
 
 if __name__ == "__main__":
     main()

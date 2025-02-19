@@ -233,18 +233,18 @@ def send_telegram_message(text):
     )
 
 def main():
-    updater = Updater(TELEGRAM_TOKEN, use_context=True)
-    dp = updater.dispatcher
+   
+   from telegram.ext import Application
+   app = Application.builder().token(TELEGRAM_TOKEN).build()
 
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("add", add_crypto))
-    dp.add_handler(CommandHandler("delete", delete_crypto))
-    dp.add_handler(CommandHandler("list", list_cryptos))
-    dp.add_handler(CommandHandler("checkinfo", check_crypto_info))
-    dp.add_handler(CommandHandler("runnow", run_analysis_now))
+   app.add_handler(CommandHandler("start", start))
+   app.add_handler(CommandHandler("add", add_crypto))
+   app.add_handler(CommandHandler("delete", delete_crypto))
+   app.add_handler(CommandHandler("list", list_cryptos))
+   app.add_handler(CommandHandler("checkinfo", check_crypto_info))
+   app.add_handler(CommandHandler("runnow", run_analysis_now))
 
-    updater.start_polling()
-    updater.idle()
+   app.run_polling()
 
 if __name__ == "__main__":
     main()

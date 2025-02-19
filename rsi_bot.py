@@ -234,7 +234,7 @@ def send_telegram_message(text):
 
 def main():
    
-   from telegram.ext import Application
+   from telegram.ext import Application, CommandHandler
    app = Application.builder().token(TELEGRAM_TOKEN).build()
 
    app.add_handler(CommandHandler("start", start))

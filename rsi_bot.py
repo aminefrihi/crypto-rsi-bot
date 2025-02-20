@@ -11,16 +11,11 @@ TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
 # ================= FONCTIONS DE GESTION =================
-def send_telegram_message(message, chat_id=CHAT_ID):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": chat_id, "text": message})
-
 def load_tracked_cryptos():
     try:
         with open("tracked_cryptos.json", "r") as f:
-            data = json.load(f)
-            return data.get("cryptos", [])
-    except FileNotFoundError:
+            return json.load(f).get("cryptos", [])
+    except (FileNotFoundError, json.JSONDecodeError):
         return []
 
 def save_tracked_cryptos(cryptos):
@@ -38,11 +33,14 @@ def save_last_update_id(update_id):
     with open("last_update_id.txt", "w") as f:
         f.write(str(update_id))
 
+# Communication Telegram
+def send_telegram_message(message, chat_id=CHAT_ID):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    requests.post(url, json={"chat_id": chat_id, "text": message})
+
 def get_telegram_updates(last_update_id):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
-    params = {"offset": last_update_id + 1, "timeout": 10}
-    response = requests.get(url, params=params)
-    return response.json()
+    return requests.get(url, params={"offset": last_update_id + 1}).json()
 
 def process_telegram_commands():
     last_update_id = load_last_update_id()
@@ -202,4 +200,5 @@ def send_analysis_report():
 
 # ================= EXECUTION PRINCIPALE =================
 if __name__ == "__main__":
+    process_telegram_commands() 
     send_analysis_report()

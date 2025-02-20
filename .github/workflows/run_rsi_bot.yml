@@ -45,7 +45,7 @@ jobs:
           git status
     
           # Commit uniquement si des modifications sont détectées
-          if ! git diff --quiet; then
+          if ! git diff --cached --quiet; then
           git commit -m "Mise à jour des cryptos suivies"
           echo "Commit effectué."
           else

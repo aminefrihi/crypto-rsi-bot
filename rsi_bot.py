@@ -21,6 +21,7 @@ def load_tracked_cryptos():
 def save_tracked_cryptos(cryptos):
     with open("tracked_cryptos.json", "w") as f:
         json.dump({"cryptos": cryptos}, f)
+    print(f"tracked_cryptos.json mis à jour : {cryptos}")
 
 def load_last_update_id():
     try:
@@ -32,6 +33,7 @@ def load_last_update_id():
 def save_last_update_id(update_id):
     with open("last_update_id.txt", "w") as f:
         f.write(str(update_id))
+    print(f"last_update_id.txt mis à jour : {update_id}")  # Log pour débogage
 
 # Communication Telegram
 def send_telegram_message(message, chat_id=CHAT_ID):

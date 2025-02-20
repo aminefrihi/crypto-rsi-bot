@@ -43,9 +43,19 @@ jobs:
           # Affiche l'état des fichiers après l'ajout
           echo "État des fichiers après git add :"
           git status
-      
-          # Commit et push uniquement si des modifications sont détectées
-          git diff --quiet || (git commit -m "Mise à jour des cryptos suivies" && git push)
+    
+          # Commit uniquement si des modifications sont détectées
+          if ! git diff --quiet; then
+          git commit -m "Mise à jour des cryptos suivies"
+          echo "Commit effectué."
+          else
+          echo "Aucune modification à commiter."
+          fi
+    
+          # Push les modifications
+          git push
+          echo "Push effectué."
+    
           # Affiche l'état après le push
           echo "État après le push :"
           git status

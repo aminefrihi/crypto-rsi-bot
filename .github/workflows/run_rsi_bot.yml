@@ -33,5 +33,16 @@ jobs:
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
+          # Affiche l'état des fichiers avant l'ajout
+          echo "État des fichiers avant git add :"
+          git status
+    
+          # Ajoute les fichiers
           git add tracked_cryptos.json last_update_id.txt
+    
+          # Affiche l'état des fichiers après l'ajout
+          echo "État des fichiers après git add :"
+          git status
+      
+          # Commit et push uniquement si des modifications sont détectées
           git diff --quiet || (git commit -m "Mise à jour des cryptos suivies" && git push)

@@ -11,20 +11,79 @@ TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
 # ================= FONCTIONS DE GESTION =================
+def send_telegram_message(message, chat_id=CHAT_ID):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    requests.post(url, json={"chat_id": chat_id, "text": message})
+
 def load_tracked_cryptos():
     try:
         with open("tracked_cryptos.json", "r") as f:
-            return json.load(f).get("cryptos", [])
-    except (FileNotFoundError, json.JSONDecodeError):
+            data = json.load(f)
+            return data.get("cryptos", [])
+    except FileNotFoundError:
         return []
 
 def save_tracked_cryptos(cryptos):
     with open("tracked_cryptos.json", "w") as f:
         json.dump({"cryptos": cryptos}, f)
 
-def send_telegram_message(message, chat_id=CHAT_ID):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": chat_id, "text": message})
+def load_last_update_id():
+    try:
+        with open("last_update_id.txt", "r") as f:
+            return int(f.read().strip())
+    except FileNotFoundError:
+        return 0
+
+def save_last_update_id(update_id):
+    with open("last_update_id.txt", "w") as f:
+        f.write(str(update_id))
+
+def get_telegram_updates(last_update_id):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
+    params = {"offset": last_update_id + 1, "timeout": 10}
+    response = requests.get(url, params=params)
+    return response.json()
+
+def process_telegram_commands():
+    last_update_id = load_last_update_id()
+    updates = get_telegram_updates(last_update_id)
+    new_update_id = last_update_id
+
+    cryptos = load_tracked_cryptos()
+    modified = False
+
+    for update in updates.get("result", []):
+        message = update.get("message", {})
+        text = message.get("text", "")
+        chat_id = str(message.get("chat", {}).get("id"))
+
+        if chat_id != CHAT_ID or not text:
+            continue
+
+        new_update_id = max(new_update_id, update["update_id"])
+
+        parts = text.split()
+        command = parts[0].lower()
+
+        if command == "/add" and len(parts) > 1:
+            crypto = parts[1].upper().strip()
+            if crypto not in cryptos and len(cryptos) < 4:  # Limite de 4 cryptos
+                cryptos.append(crypto)
+                send_telegram_message(f"✅ {crypto} ajouté à la liste.", chat_id)
+                modified = True
+        elif command == "/remove" and len(parts) > 1:
+            crypto = parts[1].upper().strip()
+            if crypto in cryptos:
+                cryptos.remove(crypto)
+                send_telegram_message(f"❌ {crypto} retiré de la liste.", chat_id)
+                modified = True
+        elif command == "/list":
+            send_telegram_message(f"📊 Cryptos suivies : {', '.join(cryptos) if cryptos else 'Aucune'}", chat_id)
+
+    if modified:
+        save_tracked_cryptos(cryptos)
+    save_last_update_id(new_update_id)
+
 
 # ================= FONCTIONS D'ANALYSE =================
 def fetch_current_prices(symbols):

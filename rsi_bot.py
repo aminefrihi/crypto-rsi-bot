@@ -174,16 +174,16 @@ def send_analysis_report():
         if signals["buy_signal"]:
             message += (
                 f"🚀 **ACHAT {symbol}**\n"
-                f"- Prix: ${signals['price']:.6f} (SMA70: ${signals['sma']:.6f})\n"
-                f"- RSI: {signals['rsi']:.1f} (<33/67)\n"
+                f"- Prix: ${signals['price']:.6f} (SMA50: ${signals['sma']:.6f})\n"
+                f"- RSI: {signals['rsi']:.1f} (<30/70)\n"
                 f"- MACD: {signals['macd_diff']:.4f} ↑\n"
                 f"- Volume: 🔥\n\n"
             )
         elif signals["sell_signal"]:
             message += (
                 f"🔻 **VENTE {symbol}**\n"
-                f"- Prix: ${signals['price']:.6f} (SMA70: ${signals['sma']:.6f})\n"
-                f"- RSI: {signals['rsi']:.1f} (<33/67)\n"
+                f"- Prix: ${signals['price']:.6f} (SMA50: ${signals['sma']:.6f})\n"
+                f"- RSI: {signals['rsi']:.1f} (<30/70)\n"
                 f"- MACD: {signals['macd_diff']:.4f} ↓\n"
                 f"- Volume: 💨\n\n"
             )

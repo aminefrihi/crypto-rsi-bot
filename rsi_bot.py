@@ -108,7 +108,7 @@ def calculate_rsi(prices, period=14):
     rs = avg_gain / avg_loss.replace(0, 1)  # Évite division par zéro
     return 100 - (100 / (1 + rs))
 
-def calculate_sma(prices, window=70):
+def calculate_sma(prices, window=50):
     return pd.Series(prices).rolling(window).mean()
 
 def calculate_macd(prices, fast=12, slow=26, signal=9):
@@ -119,12 +119,12 @@ def calculate_macd(prices, fast=12, slow=26, signal=9):
     signal_line = macd_line.ewm(span=signal, adjust=False).mean()
     return macd_line, signal_line
 
-def analyze_volume(volumes, window=20):
+def analyze_volume(volumes, window=14):
     if len(volumes) < window:
         return False
     avg_volume = pd.Series(volumes).rolling(window).mean().iloc[-1]
     current_volume = volumes[-1]
-    return current_volume > avg_volume * 2.25 and current_volume > 2_500_000
+    return current_volume > avg_volume * 1.75 and current_volume > 250_000
 
 # ================= SIGNAL D'ACHAT/VENTE =================
 def generate_signals(symbol):
@@ -142,8 +142,8 @@ def generate_signals(symbol):
     volume_alert = analyze_volume(volumes)
     
     # Conditions d'achat/vente
-    buy_signal = (rsi < 33) and (prices[-1] > sma) and (macd_line.iloc[-1] > signal_line.iloc[-1]) and volume_alert
-    sell_signal = (rsi > 67) and (prices[-1] < sma) and (macd_line.iloc[-1] < signal_line.iloc[-1]) and volume_alert
+    buy_signal = (rsi < 30) and (prices[-1] > sma) and (macd_line.iloc[-1] > signal_line.iloc[-1]) and volume_alert
+    sell_signal = (rsi > 70) and (prices[-1] < sma) and (macd_line.iloc[-1] < signal_line.iloc[-1]) and volume_alert
     
     return {
         "price": prices[-1],

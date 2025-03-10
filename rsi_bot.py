@@ -141,9 +141,26 @@ def generate_signals(symbol):
     macd_line, signal_line = calculate_macd(prices)
     volume_alert = analyze_volume(volumes)
     
-    # Conditions d'achat/vente
-    buy_signal = (rsi < 30) and (prices[-1] > sma) and (macd_line.iloc[-1] > signal_line.iloc[-1]) and volume_alert
-    sell_signal = (rsi > 70) and (prices[-1] < sma) and (macd_line.iloc[-1] < signal_line.iloc[-1]) and volume_alert
+    # Conditions individuelles pour l'achat
+    buy_conditions = [
+        rsi < 30,
+        prices[-1] > sma,
+        macd_line.iloc[-1] > signal_line.iloc[-1],
+        volume_alert
+    ]
+
+    # Conditions individuelles pour la vente
+    sell_conditions = [
+        rsi > 70,
+        prices[-1] < sma,
+        macd_line.iloc[-1] < signal_line.iloc[-1],
+        volume_alert
+    ]
+
+    # Génération des signaux : au moins 3 conditions doivent être vraies
+    buy_signal = sum(buy_conditions) >= 3
+    sell_signal = sum(sell_conditions) >= 3
+
     
     return {
         "price": prices[-1],

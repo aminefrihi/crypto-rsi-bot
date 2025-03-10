@@ -124,7 +124,7 @@ def analyze_volume(volumes, window=14):
         return False
     avg_volume = pd.Series(volumes).rolling(window).mean().iloc[-1]
     current_volume = volumes[-1]
-    return current_volume > avg_volume * 1.75 and current_volume > 250_000
+    return current_volume > avg_volume * 1.75 and current_volume > 1_000_000
 
 # ================= SIGNAL D'ACHAT/VENTE =================
 def generate_signals(symbol):
